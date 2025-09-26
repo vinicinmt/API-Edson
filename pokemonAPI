@@ -1,0 +1,103 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+
+public class PokemonAPI : MonoBehaviour
+{
+    [SerializeField] private string pokemonName = "charizard";
+    [SerializeField] private Image pokemonImage;
+    [SerializeField] private Text pokemonInfoText; 
+
+    private void Start()
+    {
+        StartCoroutine(GetPokemonData(pokemonName));
+    }
+
+    IEnumerator GetPokemonData(string name)
+    {
+        string url = $"https://pokeapi.co/api/v2/pokemon/{name.ToLower()}";
+        UnityWebRequest request = UnityWebRequest.Get(url);
+        yield return request.SendWebRequest();
+
+        if (request.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError("Erro ao acessar PokéAPI: " + request.error);
+            yield break;
+        }
+
+        PokemonData data = JsonUtility.FromJson<PokemonData>(request.downloadHandler.text);
+        string spriteUrl = data.sprites.front_default;
+
+        UnityWebRequest texRequest = UnityWebRequestTexture.GetTexture(spriteUrl);
+        yield return texRequest.SendWebRequest();
+
+        if (texRequest.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError("Erro ao baixar sprite: " + texRequest.error);
+            yield break;
+        }
+
+        Texture2D tex = DownloadHandlerTexture.GetContent(texRequest);
+        Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        pokemonImage.sprite = sprite;
+
+        string tipos = "";
+        foreach (var t in data.types)
+        {
+            tipos += t.type.name + " ";
+        }
+
+        string infoText = $"Nome: {char.ToUpper(name[0]) + name.Substring(1)}\nTipo: {tipos}";
+
+        string speciesUrl = $"https://pokeapi.co/api/v2/pokemon-species/{name.ToLower()}";
+        UnityWebRequest speciesRequest = UnityWebRequest.Get(speciesUrl);
+        yield return speciesRequest.SendWebRequest();
+
+        if (speciesRequest.result == UnityWebRequest.Result.Success)
+        {
+            PokemonSpecies speciesData = JsonUtility.FromJson<PokemonSpecies>(speciesRequest.downloadHandler.text);
+            infoText += $"\nGeração: {speciesData.generation.name.Replace("generation-", "").ToUpper()}";
+        }
+
+        pokemonInfoText.text = infoText;
+    }
+}
+
+[System.Serializable]
+public class PokemonData
+{
+    public Sprites sprites;
+    public PokemonTypeSlot[] types;
+}
+
+[System.Serializable]
+public class Sprites
+{
+    public string front_default;
+}
+
+[System.Serializable]
+public class PokemonTypeSlot
+{
+    public int slot;
+    public PokemonType type;
+}
+
+[System.Serializable]
+public class PokemonType
+{
+    public string name;
+}
+
+[System.Serializable]
+public class PokemonSpecies
+{
+    public Generation generation;
+}
+
+[System.Serializable]
+public class Generation
+{
+    public string name;
+}
